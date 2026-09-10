@@ -3,27 +3,28 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
-
+from pathlib import Path
 
         
 
 themes = list[str]()
+
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(command_prefix="/", intents=intents)
 
+Path("themes.txt").touch(exist_ok=True)
+with open("themes.txt", "r") as file:
+      for line in file:
+        if line.strip():
+            themes.append(line.strip())
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-    with open("themes.txt", "r") as file:
-          for line in file:
-            if line.strip():
-                themes.append(line)
-
     await bot.tree.sync()
 
 @bot.tree.command(name="suggest", description="Zaproponuj temat dla nastepnego Jam'u.\nMax 100 liter.")
@@ -43,6 +44,7 @@ async def suggest(interaction:discord.Interaction, temat: str):
 async def list(interaction: discord.Interaction):
     if len(themes) <= 0:
         await interaction.response.send_message("Jeszcze niema zadnych temator. Badz pierwszym, zaproponuj temat za pomoca ``/suggest``")
+        return
     themes_msg = ""
     i=0
     for theme in themes:
@@ -74,4 +76,4 @@ finally:
     with open("themes.txt", "w") as file:
         file.truncate()
         for theme in themes:
-            file.write(theme)
+            file.write(theme.strip() + '\n')
