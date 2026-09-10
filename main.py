@@ -4,8 +4,10 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
-themes = []
 
+        
+
+themes = list[str]()
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 intents = discord.Intents.default()
@@ -17,6 +19,11 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+    with open("themes.txt", "r") as file:
+          for line in file:
+            if line.strip():
+                themes.append(line)
+
     await bot.tree.sync()
 
 @bot.tree.command(name="suggest", description="Zaproponuj temat dla nastepnego Jam'u.\nMax 100 liter.")
@@ -53,11 +60,18 @@ Zaproponuj swoj temat uzywajac ``/suggest``
 @bot.tree.command(name="remove", description="Usun temat z puli")
 @app_commands.default_permissions(administrator=True)
 async def remove(interaction: discord.Interaction, nr_tematu: int):
-    if len(themes) >= nr_tematu-1:
+    if nr_tematu not in range(1, len(themes)+1):
         await interaction.response.send_message(f"Tematu z numerem {nr_tematu} nie istnieje. Sprawdz pisownie lub zobac liste tematow za pomoca ``/list``", delete_after=30)
         return
 
     themes.remove(themes[nr_tematu-1])
     await interaction.response.send_message(f"Temat usuniento z puli.", delete_after=30)
 
-bot.run(TOKEN)
+try:
+    bot.run(TOKEN)
+finally:
+    print("Saving data...")
+    with open("themes.txt", "w") as file:
+        file.truncate()
+        for theme in themes:
+            file.write(theme)
