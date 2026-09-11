@@ -4,30 +4,22 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 from pathlib import Path
-from json.encoder import JSONEncoder
-from json.decoder import JSONDecoder
-
-json_encoder = JSONEncoder()
-json_decoder = JSONDecoder()
+import json
 
 
-def load_list(path:str)->list[str]: 
-    result = list[str]() 
-    Path(path).touch(exist_ok=True)
-    try:
-        with open(path, "r") as file:
-              result = json_decoder.decode(s=file.read())
-        return result
-    except:
-        return []
+themes = list[str]()
+candidates = list[str]()
 
-def save_list(path:str, l:list[str]):
-    with open(path, "w") as file:
-        file.truncate()
-        file.write(json_encoder.encode(o=l))
+try:
+    Path("cache.json").touch(exist_ok=True)
+    with open("cache.json", "r") as file:
+        data = json.loads(file.read())
+        themes = data["themes"]
+        candidates = data["candidates"]
+except (json.JSONDecodeError, KeyError):
+    themes = []
+    candidates = []
 
-themes = load_list("themes.json")
-candidates = load_list("candidates.json")
 
 
 class AcceptSuggestView(discord.ui.View):
@@ -127,5 +119,6 @@ async def validate(interaction: discord.Interaction):
 try:
     bot.run(TOKEN)
 finally:
-    save_list("themes.json", themes)
-    save_list("candidates.json", candidates)
+    with open("cache.json", "w") as file:
+        file.truncate()
+        file.write(json.dumps({"themes": themes, "candidates": candidates}))
