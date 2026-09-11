@@ -4,10 +4,57 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 from pathlib import Path
+from json.encoder import JSONEncoder
+from json.decoder import JSONDecoder
 
-        
+json_encoder = JSONEncoder()
+json_decoder = JSONDecoder()
 
-themes = list[str]()
+
+def load_list(path:str)->list[str]: 
+    result = list[str]() 
+    Path(path).touch(exist_ok=True)
+    try:
+        with open(path, "r") as file:
+              result = json_decoder.decode(s=file.read())
+        return result
+    except:
+        return []
+
+def save_list(path:str, l:list[str]):
+    with open(path, "w") as file:
+        file.truncate()
+        file.write(json_encoder.encode(o=l))
+
+themes = load_list("themes.json")
+candidates = load_list("candidates.json")
+
+
+class AcceptSuggestView(discord.ui.View):
+    def __init__(self, candidate: str):
+        super().__init__(timeout=60)
+        self.candidate = candidate
+
+    @discord.ui.button(label="Accept", style=discord.ButtonStyle.green)
+    async def accept_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
+        candidates.remove(self.candidate)
+        themes.append(self.candidate)
+        await interaction.response.defer()
+        await interaction.followup.delete_message(interaction.message.id)
+
+    @discord.ui.button(label="Deny", style=discord.ButtonStyle.red)
+    async def deny_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
+        candidates.remove(self.candidate)
+        await interaction.response.defer()
+        await interaction.followup.delete_message(interaction.message.id)
+    @discord.ui.button(label="Skip", style=discord.ButtonStyle.gray)
+
+    async def skip_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        await interaction.followup.delete_message(interaction.message.id)
+
+
+
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -16,11 +63,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
-Path("themes.txt").touch(exist_ok=True)
-with open("themes.txt", "r") as file:
-      for line in file:
-        if line.strip():
-            themes.append(line.strip())
+
 
 @bot.event
 async def on_ready():
@@ -29,16 +72,16 @@ async def on_ready():
 
 @bot.tree.command(name="suggest", description="Zaproponuj temat dla nastepnego Jam'u.\nMax 100 liter.")
 async def suggest(interaction:discord.Interaction, temat: str):
-    if(temat in themes):
-        await interaction.response.send_message(f"Nie udalo sie dodac temat: ``{temat}`` juz jest w pule. Sprawdz pule za pomoca ``/list``", delete_after=30)
+    if(temat in themes or temat in candidates):
+        await interaction.response.send_message(f"Nie udalo sie dodac temat: ``{temat}`` juz zaproponowany, lub czeka na walidacje. Sprawdz pule za pomoca ``/list``", delete_after=30)
         return
 
     if(len(temat)>100):
         await interaction.response.send_message(f"Nie udalo sie dodac temat: Temat jest zadlugi. (Max 100 znakow)", delete_after=30)
         return 
     
-    themes.append(temat)
-    await interaction.response.send_message(f"Dodano ``{temat}`` do puly tematow. Sprawdz pule za pomoca ``/list``", delete_after=30)
+    candidates.append(temat)
+    await interaction.response.send_message(f"Twoj temat oczekuje na validacje. Puzniej zobaczysz go za pomoca ``/list``", delete_after=30)
 
 @bot.tree.command(name="list", description="Wyswietla wszystkie tematy w pule.")
 async def list(interaction: discord.Interaction):
@@ -69,11 +112,20 @@ async def remove(interaction: discord.Interaction, nr_tematu: int):
     themes.remove(themes[nr_tematu-1])
     await interaction.response.send_message(f"Temat usuniento z puli.", delete_after=30)
 
+
+@bot.tree.command(name="validate", description="Cycle tru list of candidates and hand pick valid ones.")
+@app_commands.default_permissions(administrator=True)
+async def validate(interaction: discord.Interaction):
+
+    await interaction.response.send_message("List of current candidates:", ephemeral=True)
+    for candidate in candidates:
+        if candidate in themes:
+            candidates.remove(candidate)
+            continue
+        await interaction.followup.send(f"``{candidate}``", ephemeral=True, view=AcceptSuggestView(candidate=candidate))
+
 try:
     bot.run(TOKEN)
 finally:
-    print("Saving data...")
-    with open("themes.txt", "w") as file:
-        file.truncate()
-        for theme in themes:
-            file.write(theme.strip() + '\n')
+    save_list("themes.json", themes)
+    save_list("candidates.json", candidates)
