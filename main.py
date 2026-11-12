@@ -206,6 +206,9 @@ Zaproponuj swoj temat piszac do kanalu #{channel_name}
 @bot.tree.command(name="admin-help", description="Wyswietla pomoc dla administratorow.")
 @discord.app_commands.default_permissions(ban_members=True)
 async def admin_help(interaction: discord.Interaction):
+    if (not interaction.user.guild_permissions.ban_members):
+        await interaction.response.send_message("Nie masz uprawnien by korzystac z tej komendy.", delete_after=30, ephemeral=True)
+        return
     await interaction.response.send_message(
         f"""
 ## Pomoc dla administratorow
@@ -225,6 +228,10 @@ Te komendy dostepne sa tylko dla administratorow.
 @bot.tree.command(name="remove", description="Usun temat z puli")
 @discord.app_commands.default_permissions(ban_members=True)
 async def remove(interaction: discord.Interaction, nr_tematu: int):
+    if (not interaction.user.guild_permissions.ban_members):
+        await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
+        return
+
     if nr_tematu not in range(1, len(themes)+1):
         await interaction.response.send_message(f"Tematu z numerem {nr_tematu} nie istnieje. Sprawdz pisownie lub zobac liste tematow za pomoca ``/list``", delete_after=30, ephemeral=True)
         return
@@ -236,6 +243,10 @@ async def remove(interaction: discord.Interaction, nr_tematu: int):
 @bot.tree.command(name="validate", description="Cycle tru list of candidates and hand pick valid ones.")
 @discord.app_commands.default_permissions(ban_members=True)
 async def validate(interaction: discord.Interaction):
+    if (not interaction.user.guild_permissions.ban_members):
+        await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
+        return
+
     await interaction.response.send_message("List of current candidates:", ephemeral=True)
     for candidate in candidates:
         if candidate in themes:
@@ -246,6 +257,10 @@ async def validate(interaction: discord.Interaction):
 @bot.tree.command(name="set_target_channel", description="blablablahhhh bibibuu")
 @discord.app_commands.default_permissions(ban_members=True)
 async def set_target_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    if (not interaction.user.guild_permissions.ban_members):
+        await interaction.response.send_message("Nie masz uprawnien by ustawiac kanal docelowy.", delete_after=30, ephemeral=True)
+        return
+
     global target_channel, channel_name
     target_channel = channel.id
     resolved_channel = bot.get_channel(target_channel)
@@ -260,8 +275,12 @@ async def set_target_channel(interaction: discord.Interaction, channel: discord.
 @bot.tree.command(name="force_load_channel", description="I am gay af")
 @discord.app_commands.default_permissions(ban_members=True)
 async def force_load_channel(interaction: discord.Interaction):
-   await load_channel_messages()
-   await interaction.response.send_message("Loaded. See console for logs.", ephemeral=True, delete_after=30)
+    if (not interaction.user.guild_permissions.ban_members):
+        await interaction.response.send_message("Nie masz uprawnien by wczytywac kanal.", delete_after=30, ephemeral=True)
+        return
+
+    await load_channel_messages()
+    await interaction.response.send_message("Loaded. See console for logs.", ephemeral=True, delete_after=30)
 
 try:
     bot.run(TOKEN)
