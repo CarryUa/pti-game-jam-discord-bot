@@ -203,15 +203,28 @@ async def list(interaction: discord.Interaction):
 Zaproponuj swoj temat piszac do kanalu #{channel_name}
 """, delete_after=120, ephemeral=True)
     
+@bot.tree.command(name="admin-help", description="Wyswietla pomoc dla administratorow.")
+@discord.app_commands.default_permissions(ban_members=True)
+async def admin_help(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        f"""
+## Pomoc dla administratorow
+- `/remove <nr_tematu>` - Usuwa temat z puli.
+- `/validate` - Przegladaj propozycje tematow i zatwierdzaj lub odrzucaj.
+- `/set_target_channel <kanal>` - Ustawia kanal docelowy dla tematow.
+- `/force_load_channel` - Wczytuje wiadomosci z kanalu docelowego. (Odbywa sie automatycznie)
+- `/admin-help` - Wyswietla te wiadomosc pomocy.
+
+Te komendy dostepne sa tylko dla administratorow.
+""",
+        ephemeral=True,
+        delete_after=120,
+    )
+
+
 @bot.tree.command(name="remove", description="Usun temat z puli")
-@discord.app_commands.default_permissions(administrator=True)
+@discord.app_commands.default_permissions(ban_members=True)
 async def remove(interaction: discord.Interaction, nr_tematu: int):
-
-    if (not interaction.user.guild_permissions.administrator):
-        await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
-        return
-
-
     if nr_tematu not in range(1, len(themes)+1):
         await interaction.response.send_message(f"Tematu z numerem {nr_tematu} nie istnieje. Sprawdz pisownie lub zobac liste tematow za pomoca ``/list``", delete_after=30, ephemeral=True)
         return
@@ -221,12 +234,8 @@ async def remove(interaction: discord.Interaction, nr_tematu: int):
 
 
 @bot.tree.command(name="validate", description="Cycle tru list of candidates and hand pick valid ones.")
-@discord.app_commands.default_permissions(administrator=True)
+@discord.app_commands.default_permissions(ban_members=True)
 async def validate(interaction: discord.Interaction):
-    if (not interaction.user.guild_permissions.administrator):
-        await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
-        return
-
     await interaction.response.send_message("List of current candidates:", ephemeral=True)
     for candidate in candidates:
         if candidate in themes:
@@ -235,7 +244,7 @@ async def validate(interaction: discord.Interaction):
         await interaction.followup.send(f"``{candidate}``", ephemeral=True, view=AcceptSuggestView(candidate=candidate))
 
 @bot.tree.command(name="set_target_channel", description="blablablahhhh bibibuu")
-@discord.app_commands.default_permissions(administrator=True)
+@discord.app_commands.default_permissions(ban_members=True)
 async def set_target_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     global target_channel, channel_name
     target_channel = channel.id
@@ -249,7 +258,7 @@ async def set_target_channel(interaction: discord.Interaction, channel: discord.
     await interaction.response.send_message(f"Set target channel to ``{target_channel}``. Run force_load_channel or restart the bot to load its content", ephemeral=True, delete_after=30)
 
 @bot.tree.command(name="force_load_channel", description="I am gay af")
-@discord.app_commands.default_permissions(administrator=True)
+@discord.app_commands.default_permissions(ban_members=True)
 async def force_load_channel(interaction: discord.Interaction):
    await load_channel_messages()
    await interaction.response.send_message("Loaded. See console for logs.", ephemeral=True, delete_after=30)
