@@ -7,24 +7,6 @@ from pathlib import Path
 import json
 
 
-themes = list[str]()
-candidates = list[str]()
-qualified_user_ids = list[int]()
-
-try:
-    Path("cache.json").touch(exist_ok=True)
-    with open("cache.json", "r") as file:
-        data = json.loads(file.read())
-        themes = data["themes"]
-        candidates = data["candidates"]
-        qualified_user_ids = data["qualified_user_ids"]
-except (json.JSONDecodeError, KeyError):
-    themes = []
-    candidates = []
-    qualified_user_ids = []
-
-
-
 class AcceptSuggestView(discord.ui.View):
     candidate: str
 
@@ -38,18 +20,54 @@ class AcceptSuggestView(discord.ui.View):
         themes.append(self.candidate)
         await interaction.response.defer()
         await interaction.followup.delete_message(interaction.message.id)
+        save_stuff()
 
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red)
     async def deny_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
         candidates.remove(self.candidate)
+        blacklist.append(self.candidate)
         await interaction.response.defer()
         await interaction.followup.delete_message(interaction.message.id)
+        save_stuff()
     @discord.ui.button(label="Skip", style=discord.ButtonStyle.gray)
-
     async def skip_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await interaction.followup.delete_message(interaction.message.id)
 
+
+    
+
+
+themes = list[str]()
+candidates = list[str]()
+blacklist = list[str]()
+target_channel = int()
+channel_name = "<unset_channel>"
+
+Path("cache.json").touch(exist_ok=True)
+
+
+def save_stuff():
+    global themes, candidates, blacklist, target_channel
+    tmp = "cache.json.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"themes": themes, "candidates": candidates, "target_channel": target_channel,
+                   "blacklist": blacklist}, f, ensure_ascii=False)
+        f.flush(); os.fsync(f.fileno())
+    os.replace(tmp, "cache.json")
+
+try:
+    with open("cache.json", "r") as file:
+        data = json.loads(file.read())
+        themes = data["themes"]
+        candidates = data["candidates"]
+        blacklist = data["blacklist"]
+        target_channel = data["target_channel"]
+except (json.JSONDecodeError, KeyError):
+    themes = []
+    candidates = []
+    blacklist = []
+    target_channel = 0
 
 
 
@@ -61,29 +79,115 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 
+async def load_channel_messages():
+    global channel_name
+
+    if target_channel == 0:
+        channel_name = "<unset_channel>"
+        return []
+
+    channel = bot.get_channel(target_channel)
+    if channel is None:
+        channel_name = str(target_channel)
+        return []
+
+    channel_name = channel.name
+    
+    async for msg in channel.history(limit=500):
+        theme = msg.content
+        if(theme == ""): continue
+        if(len(theme) > 100): continue
+        if(theme in candidates or
+           theme in themes or
+           theme in blacklist): continue
+        candidates.append(theme)
+        print(theme)
+
+    save_stuff()
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     await bot.tree.sync()
+    await load_channel_messages()
 
-@bot.tree.command(name="suggest", description="Zaproponuj temat dla nastepnego Jam'u.\nMax 100 liter.")
-async def suggest(interaction:discord.Interaction, temat: str):
-    if(temat in themes or temat in candidates):
-        await interaction.response.send_message(f"Nie udalo sie dodac temat: ``{temat}`` juz zaproponowany, lub czeka na walidacje. Sprawdz pule za pomoca ``/list``", delete_after=30, ephemeral=True)
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command):
+    save_stuff()
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Ignore the bot's own messages
+    if message.author == bot.user:
         return
 
-    if(len(temat)>100):
-        await interaction.response.send_message(f"Nie udalo sie dodac temat: Temat jest zadlugi. (Max 100 znakow)", delete_after=30, ephemeral=True)
-        return 
+    # Only react in the target channel
+    if message.channel.id != target_channel:
+        return
+
+    theme = message.content
+    if not theme or len(theme) > 100:
+        return
+    if theme in candidates or theme in themes or theme in blacklist:
+        return
+
+    candidates.append(theme)
+    save_stuff()
+    await bot.process_commands(message)
     
-    candidates.append(temat)
-    await interaction.response.send_message(f"Twoj temat oczekuje na validacje. Puzniej zobaczysz go za pomoca ``/list``", delete_after=30, ephemeral=True)
+# @bot.tree.command(name="suggest", description="Zaproponuj temat dla nastepnego Jam'u.\nMax 100 liter.")
+# async def suggest(interaction:discord.Interaction, temat: str):
+#     if(temat in themes or temat in candidates):
+#         await interaction.response.send_message(f"Nie udalo sie dodac temat: ``{temat}`` juz zaproponowany, lub czeka na walidacje. Sprawdz pule za pomoca ``/list``", delete_after=30, ephemeral=True)
+#         return
+
+#     if(temat in blacklist):
+#         await interaction.response.send_message(f"Nie udalo sie dodac temat: Temat ``{temat}`` zostal zablokowany prez administratora. Skontaktuj sie z administracja jezeli uwazasz ze temat zostal zablokowany niesprawiedliwie", delete_after=30, ephemeral=True)
+#         return
+
+#     if(len(temat)>100):
+#         await interaction.response.send_message(f"Nie udalo sie dodac temat: Temat jest zadlugi. (Max 100 znakow)", delete_after=30, ephemeral=True)
+#         return 
+
+#     candidates.append(temat)
+#     await interaction.response.send_message(f"Twoj temat oczekuje na validacje. Puzniej zobaczysz go za pomoca ``/list``", delete_after=30, ephemeral=True)
+
+@bot.tree.command(name="help", description="Wyswietla pomoc i kanal do wysylania tematow.")
+async def help_command(interaction: discord.Interaction):
+    global channel_name
+    resolved_channel = bot.get_channel(target_channel)
+    if target_channel == 0:
+        channel_name = "<unset_channel>"
+    elif resolved_channel is not None:
+        channel_name = resolved_channel.name
+
+    channel_mention = f"<#{target_channel}>" if target_channel != 0 else "`<unset_channel>`"
+    await interaction.response.send_message(
+        f"""
+## Pomoc
+- `/list` - Wyswietla wszystkie zatwierdzone tematy w puli.
+- `/help` - Wyswietla te wiadomosc pomocy.
+
+**Jak zaproponowac temat:**
+Wyslij swoj temat jako zwykla wiadomosc na kanal {channel_mention} (`#{channel_name}`).
+Tematy moga miec maksymalnie 100 znakow.
+""",
+        ephemeral=True,
+        delete_after=120,
+    )
+
 
 @bot.tree.command(name="list", description="Wyswietla wszystkie tematy w pule.")
 async def list(interaction: discord.Interaction):
+    global channel_name
+    resolved_channel = bot.get_channel(target_channel)
+    if target_channel == 0:
+        channel_name = "<unset_channel>"
+    elif resolved_channel is not None:
+        channel_name = resolved_channel.name
+
     if len(themes) <= 0:
-        await interaction.response.send_message("Jeszcze niema zadnych temator. Badz pierwszym, zaproponuj temat za pomoca ``/suggest``", ephemeral=True)
+        await interaction.response.send_message(f"Jeszcze niema zadnych temator. Badz pierwszym, zaproponuj temat piszac do kanalu #{channel_name}", ephemeral=True)
         return
     themes_msg = ""
     i=0
@@ -96,14 +200,14 @@ async def list(interaction: discord.Interaction):
 {themes_msg}
 ```
 
-Zaproponuj swoj temat uzywajac ``/suggest``
-""", delete_after=120)
+Zaproponuj swoj temat piszac do kanalu #{channel_name}
+""", delete_after=120, ephemeral=True)
     
 @bot.tree.command(name="remove", description="Usun temat z puli")
+@discord.app_commands.default_permissions(administrator=True)
 async def remove(interaction: discord.Interaction, nr_tematu: int):
 
-    if (not interaction.user.guild_permissions.administrator 
-        and interaction.user.id not in qualified_user_ids):
+    if (not interaction.user.guild_permissions.administrator):
         await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
         return
 
@@ -117,9 +221,9 @@ async def remove(interaction: discord.Interaction, nr_tematu: int):
 
 
 @bot.tree.command(name="validate", description="Cycle tru list of candidates and hand pick valid ones.")
+@discord.app_commands.default_permissions(administrator=True)
 async def validate(interaction: discord.Interaction):
-    if (not interaction.user.guild_permissions.administrator 
-        and interaction.user.id not in qualified_user_ids):
+    if (not interaction.user.guild_permissions.administrator):
         await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
         return
 
@@ -130,54 +234,27 @@ async def validate(interaction: discord.Interaction):
             continue
         await interaction.followup.send(f"``{candidate}``", ephemeral=True, view=AcceptSuggestView(candidate=candidate))
 
-@bot.tree.command(name="add_qualified_user", description="Nadaje uzytkowniku prawo usuwac i validowac tematy")
+@bot.tree.command(name="set_target_channel", description="blablablahhhh bibibuu")
 @discord.app_commands.default_permissions(administrator=True)
-async def add_qualified_user(interaction: discord.Interaction, user: discord.User):
-    if(user.id in qualified_user_ids):
-        await interaction.response.send_message(f"{user.mention} juz jest w listie kwalifikowanyh userow.", delete_after=30, ephemeral=True)
-        return
+async def set_target_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    global target_channel, channel_name
+    target_channel = channel.id
+    resolved_channel = bot.get_channel(target_channel)
+    if target_channel == 0:
+        channel_name = "<unset_channel>"
+    elif resolved_channel is not None:
+        channel_name = resolved_channel.name
+    else:
+        channel_name = getattr(channel, "name", str(target_channel))
+    await interaction.response.send_message(f"Set target channel to ``{target_channel}``. Run force_load_channel or restart the bot to load its content", ephemeral=True, delete_after=30)
 
-    qualified_user_ids.append(user.id)
-    await interaction.response.send_message(f"Dodano {user.mention} do listy kwalifikowanyh userow.", delete_after=30, ephemeral=True)
-    return
-
-@bot.tree.command(name="remove_qualified_user", description="Nadaje uzytkowniku prawo usuwac i validowac tematy")
+@bot.tree.command(name="force_load_channel", description="I am gay af")
 @discord.app_commands.default_permissions(administrator=True)
-async def remove_qualified_user(interaction: discord.Interaction, user: discord.User):
-    if(user.id not in qualified_user_ids):
-        await interaction.response.send_message(f"{user.mention} nie jest kwalifikowanym userem.", delete_after=30, ephemeral=True)
-        return
-
-    qualified_user_ids.remove(user.id)
-    await interaction.response.send_message(f"Usuniento {user.mention} z listy kwalifikowanyh userow.", delete_after=30, ephemeral=True)
-    return
-
-@bot.tree.command(name="list_qualified_users", description="Nadaje uzytkowniku prawo usuwac i validowac tematy")
-@discord.app_commands.default_permissions(administrator=True)
-async def list_qualified_users(interaction: discord.Interaction):
-    if(len(qualified_user_ids) <=0):
-        await interaction.response.send_message(f"Narazie niema zadnego kwalifikowanego usera. Uzyj ``/add_qualified_user`` by je dodac.", delete_after=30, ephemeral=True)
-        return
-
-    users = ""
-    for id in qualified_user_ids:
-        try:
-            user = await bot.fetch_user(id)
-            users += f"{user.mention}\n"
-        except:
-            ""
-
-    if users == "":
-        await interaction.response.send_message(f"Narazie niema zadnego kwalifikowanego usera. Uzyj ``/add_qualified_user`` by je dodac.", delete_after=30, ephemeral=True)
-        return
-
-        
-    await interaction.response.send_message(f"Kwalifikowane usery:\n{users}", delete_after=30, ephemeral=True)
-    return
+async def force_load_channel(interaction: discord.Interaction):
+   await load_channel_messages()
+   await interaction.response.send_message("Loaded. See console for logs.", ephemeral=True, delete_after=30)
 
 try:
     bot.run(TOKEN)
 finally:
-    with open("cache.json", "w") as file:
-        file.truncate()
-        file.write(json.dumps({"themes": themes, "candidates": candidates, "qualified_user_ids": qualified_user_ids}))
+    save_stuff()

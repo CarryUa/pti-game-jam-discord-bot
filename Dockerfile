@@ -1,9 +1,10 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY pythonreq.txt .
+COPY . .   
+# COPY pythonreq.txt .
+# COPY .env .
 RUN pip install --no-cache-dir -r pythonreq.txt
 
-COPY . .   
 
 CMD ["python", "main.py"]
