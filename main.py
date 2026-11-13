@@ -83,7 +83,7 @@ async def suggest(interaction:discord.Interaction, temat: str):
 @bot.tree.command(name="list", description="Wyswietla wszystkie tematy w pule.")
 async def list(interaction: discord.Interaction):
     if len(themes) <= 0:
-        await interaction.response.send_message("Jeszcze niema zadnych temator. Badz pierwszym, zaproponuj temat za pomoca ``/suggest``", ephemeral=True)
+        await interaction.response.send_message("Jeszcze niema zadnych temator. Badz pierwszym, zaproponuj temat za pomoca ``/suggest``", delete_after=30, ephemeral=True)
         return
     themes_msg = ""
     i=0
@@ -97,7 +97,7 @@ async def list(interaction: discord.Interaction):
 ```
 
 Zaproponuj swoj temat uzywajac ``/suggest``
-""", delete_after=120)
+""", delete_after=120, ephemeral=True)
     
 @bot.tree.command(name="remove", description="Usun temat z puli")
 async def remove(interaction: discord.Interaction, nr_tematu: int):
@@ -123,12 +123,12 @@ async def validate(interaction: discord.Interaction):
         await interaction.response.send_message("Nie masz uprawnien by usuwac tematy z puli.", delete_after=30, ephemeral=True)
         return
 
-    await interaction.response.send_message("List of current candidates:", ephemeral=True)
+    await interaction.response.send_message("List of current candidates:", delete_after=30, ephemeral=True)
     for candidate in candidates:
         if candidate in themes:
             candidates.remove(candidate)
             continue
-        await interaction.followup.send(f"``{candidate}``", ephemeral=True, view=AcceptSuggestView(candidate=candidate))
+        await interaction.followup.send(f"``{candidate}``", delete_after=30, ephemeral=True, view=AcceptSuggestView(candidate=candidate))
 
 @bot.tree.command(name="add_qualified_user", description="Nadaje uzytkowniku prawo usuwac i validowac tematy")
 @discord.app_commands.default_permissions(administrator=True)
@@ -174,6 +174,33 @@ async def list_qualified_users(interaction: discord.Interaction):
         
     await interaction.response.send_message(f"Kwalifikowane usery:\n{users}", delete_after=30, ephemeral=True)
     return
+
+@bot.tree.command(name="help", description="Wyswietla liste komend dla zwyklych userow.")
+async def help_command(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "## Pomoc - komendy dla zwyklych userow:\n"
+        "``/suggest <temat>`` - Zaproponuj temat dla nastepnego Jam'u. Max 100 liter.\n"
+        "``/list`` - Wyswietla wszystkie tematy w pule.\n"
+        "``/help`` - Wyswietla ta pomoc.\n"
+        "``/help_admin`` - Wyswietla pomoc dla kwalifikowanych userow.",
+        delete_after=30,
+        ephemeral=True,
+    )
+
+@bot.tree.command(name="help_admin", description="Wyswietla liste komend dla kwalifikowanych userow.")
+async def help_admin_command(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "## Pomoc - komendy dla kwalifikowanych userow:\n"
+        "``/remove <nr_tematu>`` - Usun temat z puli.\n"
+        "``/validate`` - Przegladaj kandydatow i zatwierdzaj tematy.\n"
+        "``/add_qualified_user <user>`` - Nadaj uzytkownikowi prawo usuwac i validowac tematy. (admin)\n"
+        "``/remove_qualified_user <user>`` - Odbierz uzytkownikowi prawo. (admin)\n"
+        "``/list_qualified_users`` - Wyswietla liste kwalifikowanych userow. (admin)\n"
+        "``/help`` - Wyswietla pomoc dla zwyklych userow.\n"
+        "``/help_admin`` - Wyswietla ta pomoc.",
+        delete_after=30,
+        ephemeral=True,
+    )
 
 try:
     bot.run(TOKEN)
