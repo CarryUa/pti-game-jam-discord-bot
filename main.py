@@ -7,12 +7,20 @@ from pathlib import Path
 import json
 
 
+Path("cache.json").touch(exist_ok=True)
+
+def save_stuff():
+    Path("cache.json").touch(exist_ok=True)
+    with open("cache.json", "w") as file:
+            file.truncate()
+            file.write(json.dumps({"themes": themes, "candidates": candidates, "qualified_user_ids": qualified_user_ids}))
+
+
 themes = list[str]()
 candidates = list[str]()
 qualified_user_ids = list[int]()
 
 try:
-    Path("cache.json").touch(exist_ok=True)
     with open("cache.json", "r") as file:
         data = json.loads(file.read())
         themes = data["themes"]
@@ -36,12 +44,14 @@ class AcceptSuggestView(discord.ui.View):
     async def accept_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
         candidates.remove(self.candidate)
         themes.append(self.candidate)
+        save_stuff()
         await interaction.response.defer()
         await interaction.followup.delete_message(interaction.message.id)
 
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red)
     async def deny_suggestion(self, interaction: discord.Interaction, button: discord.ui.Button):
         candidates.remove(self.candidate)
+        save_stuff()
         await interaction.response.defer()
         await interaction.followup.delete_message(interaction.message.id)
     @discord.ui.button(label="Skip", style=discord.ButtonStyle.gray)
@@ -78,6 +88,7 @@ async def suggest(interaction:discord.Interaction, temat: str):
         return 
     
     candidates.append(temat)
+    save_stuff()
     await interaction.response.send_message(f"Twoj temat oczekuje na validacje. Puzniej zobaczysz go za pomoca ``/list``", delete_after=30, ephemeral=True)
 
 @bot.tree.command(name="list", description="Wyswietla wszystkie tematy w pule.")
@@ -113,6 +124,7 @@ async def remove(interaction: discord.Interaction, nr_tematu: int):
         return
 
     themes.remove(themes[nr_tematu-1])
+    save_stuff()
     await interaction.response.send_message(f"Temat usuniento z puli.", delete_after=30, ephemeral=True)
 
 
@@ -128,7 +140,7 @@ async def validate(interaction: discord.Interaction):
         if candidate in themes:
             candidates.remove(candidate)
             continue
-        await interaction.followup.send(f"``{candidate}``", delete_after=30, ephemeral=True, view=AcceptSuggestView(candidate=candidate))
+        await interaction.followup.send(f"``{candidate}``", ephemeral=True, view=AcceptSuggestView(candidate=candidate))
 
 @bot.tree.command(name="add_qualified_user", description="Nadaje uzytkowniku prawo usuwac i validowac tematy")
 @discord.app_commands.default_permissions(administrator=True)
@@ -138,6 +150,7 @@ async def add_qualified_user(interaction: discord.Interaction, user: discord.Use
         return
 
     qualified_user_ids.append(user.id)
+    save_stuff()
     await interaction.response.send_message(f"Dodano {user.mention} do listy kwalifikowanyh userow.", delete_after=30, ephemeral=True)
     return
 
@@ -205,6 +218,4 @@ async def help_admin_command(interaction: discord.Interaction):
 try:
     bot.run(TOKEN)
 finally:
-    with open("cache.json", "w") as file:
-        file.truncate()
-        file.write(json.dumps({"themes": themes, "candidates": candidates, "qualified_user_ids": qualified_user_ids}))
+    save_stuff()
